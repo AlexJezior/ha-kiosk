@@ -1,8 +1,6 @@
 import os
-import json
+import shutil
 import time
-import urllib.error
-import urllib.request
 from gpiozero import MotionSensor
 from subprocess import run, Popen
 
@@ -15,7 +13,6 @@ PIR_PIN = get_env_int("PIR_PIN", 17)
 OFF_DELAY = get_env_int("OFF_DELAY", 60)  # Time in seconds (300 = 5 minutes)
 DISPLAY_NAME = get_env_str("DISPLAY_NAME", "HDMI-A-1")  # Run 'wlr-randr' to verify this name
 HA_URL = get_env_str("HA_URL", "http://homeassistant:8123/dashboard-nebula/0?kiosk")
-REMOTE_DEBUG_PORT = get_env_int("REMOTE_DEBUG_PORT", 9222)
 
 # Tell python which display to control (Standard for PI Kiosks)
 os.environ.setdefault('WAYLAND_DISPLAY', "wayland-0")
@@ -24,8 +21,10 @@ os.environ.setdefault('XDG_RUNTIME_DIR', f"/run/user/{os.getuid()}")
 pir = MotionSensor(PIR_PIN, queue_len=1)
 last_motion_time = time.time()
 screen_on = True
+browser_proc = None
 
 def launch_browser():
+    global browser_proc
     # Start chromium in kiosk mode if it is not already running
     print(f"[{get_now()}] Launching Chromium...")
     cmd = [
@@ -34,52 +33,30 @@ def launch_browser():
         "--noerrdialogs",
         "--disable-infobars",
         "--disable-restore-session-state",
-        f"--remote-debugging-port={REMOTE_DEBUG_PORT}",
         HA_URL
     ]
-    Popen(cmd)
+    browser_proc = Popen(cmd)
 
-def remote_reload():
-    base = f"http://127.0.0.1:{REMOTE_DEBUG_PORT}"
+
+def close_browser():
+    global browser_proc
     try:
-        with urllib.request.urlopen(base + "/json", timeout=1) as resp:
-            targets = json.loads(resp.read().decode("utf-8"))
-
-        target_id = None
-        for t in targets:
-            if t.get("type") != "page":
-                continue
-            url = t.get("url", "")
-            if HA_URL in url:
-                target_id = t.get("id")
-                break
-
-        if target_id is None:
-            for t in targets:
-                if t.get("type") == "page":
-                    target_id = t.get("id")
-                    break
-
-        if not target_id:
-            return False
-
-        urllib.request.urlopen(base + f"/json/reload/{target_id}", timeout=1).read()
-        return True
+        if browser_proc is not None and browser_proc.poll() is None:
+            print(f"[{get_now()}] Closing Chromium...")
+            browser_proc.terminate()
+            try:
+                browser_proc.wait(timeout=5)
+            except Exception:
+                browser_proc.kill()
+        browser_proc = None
     except Exception as e:
-        print(f"[{get_now()}] Remote reload failed: {e}")
-        return False
+        print(f"[{get_now()}] Failed to close Chromium: {e}")
 
-def refresh_browser():
-    # Simulate F5 to refresh the page
-    print(f"[{get_now()}] Refreshing browser...")
     try:
-        if remote_reload():
-            print(f"[{get_now()}] Remote reload OK")
-            return
-        run(['wtype', '-k', 'F5'], check=False)
-        run(['xdotool', 'key', 'F5'], check=False)
-    except Exception as e:
-        print(f"[{get_now()}] Refresh signal failed: {e}")
+        if shutil.which('pkill') is not None:
+            run(['pkill', '-f', 'chromium.*--kiosk'], check=False)
+    except Exception:
+        pass
 
 def turn_on():
     global screen_on
@@ -92,12 +69,13 @@ def turn_on():
             run(['wlr-randr', '--output', DISPLAY_NAME, '--on'])
             screen_on = True
             time.sleep(1) # Give the screen a second to handshake
-            refresh_browser()
+            launch_browser()
 
 def turn_off():
     global screen_on
     if screen_on:
         print(f"[{get_now()}] Putting screen to sleep...\n\n")
+        close_browser()
         # 'wlr-randr --output HDMI-A-1 --off' puts the monitor in to power-save mode
         run(['wlr-randr', '--output', DISPLAY_NAME, '--off'])
         screen_on = False
