@@ -1,6 +1,8 @@
-# HomeAssistant Kiosk
+# HomeAssistant Kiosk Power Management
 
-Motion-activated kiosk “power manager” for a Home Assistant dashboard.
+Motion-activated kiosk “power manager” for a HomeAssistant dashboard. I have HomeAssistant running on a local server, and wanted to have a kiosk near the entry of my home that would power on when motion was detected, and power off after a period of inactivity.
+
+Using a Raspberry Pi 5 with a PIR motion sensor, and an old monitor I had lying around, I was able to achieve what I was looking for... Here's how it works:
 
 - Launches `chromium` in kiosk mode pointed at your Home Assistant dashboard URL
 - Uses a PIR motion sensor on a Raspberry Pi GPIO pin to detect motion
