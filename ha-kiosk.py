@@ -1,25 +1,25 @@
 import os
 import time
-from datetime import datetime
 from gpiozero import MotionSensor
 from subprocess import run, Popen
 
+from config import get_env_int, get_env_str, load_env, get_now
+
+load_env()
+
 # Configuration
-PIR_PIN = 17 # Use GPIO 17 (Pin 11)
-OFF_DELAY = 60 # Time in seconds (300 = 5 minutes)
-DISPLAY_NAME = 'HDMI-A-1' # Run 'wlr-randr' to verify this name
-HA_URL = "http://homeassistant:8123/dashboard-nebula/0?kiosk"
+PIR_PIN = get_env_int("PIR_PIN", 17)
+OFF_DELAY = get_env_int("OFF_DELAY", 60)  # Time in seconds (300 = 5 minutes)
+DISPLAY_NAME = get_env_str("DISPLAY_NAME", "HDMI-A-1")  # Run 'wlr-randr' to verify this name
+HA_URL = get_env_str("HA_URL", "http://homeassistant:8123/dashboard-nebula/0?kiosk")
 
 # Tell python which display to control (Standard for PI Kiosks)
-os.environ['WAYLAND_DISPLAY'] = "wayland-0"
-os.environ['XDG_RUNTIME_DIR'] = f"/run/user/{os.getuid()}"
+os.environ.setdefault('WAYLAND_DISPLAY', "wayland-0")
+os.environ.setdefault('XDG_RUNTIME_DIR', f"/run/user/{os.getuid()}")
 
 pir = MotionSensor(PIR_PIN, queue_len=1)
 last_motion_time = time.time()
 screen_on = True
-
-def get_now():
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 def launch_browser():
     # Start chromium in kiosk mode if it is not already running
