@@ -1,0 +1,20 @@
+[Unit]
+Description=Home Assistant Kiosk Motion Display Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ajezior
+WorkingDirectory=/home/ajezior/ha-kiosk
+ExecStart=/usr/bin/python3 /home/ajezior/ha-kiosk/ha-kiosk.py
+Restart=on-failure
+RestartSec=2
+
+# These are also set inside the script, but keeping them here can help ensure
+# systemd starts it with the right session assumptions.
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+[Install]
+WantedBy=default.target
