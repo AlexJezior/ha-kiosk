@@ -1,5 +1,6 @@
 import os
 import shlex
+import shutil
 import time
 from gpiozero import MotionSensor
 from subprocess import run, Popen
@@ -37,27 +38,38 @@ def launch_browser():
     Popen(cmd)
 
 
+def try_run(cmd):
+    exe = cmd[0]
+    if shutil.which(exe) is None:
+        print(f"[{get_now()}] Not found: {exe}")
+        return None
+    result = run(cmd, check=False)
+    print(f"[{get_now()}] Ran: {' '.join(cmd)} (rc={result.returncode})")
+    return result.returncode
+
+
 def focus_browser():
     if FOCUS_CMD:
         try:
-            run(shlex.split(FOCUS_CMD), check=False)
+            cmd = shlex.split(FOCUS_CMD)
+            try_run(cmd)
             return
         except Exception:
             return
 
     try:
-        run(['swaymsg', '[app_id="chromium"]', 'focus'], check=False)
-        run(['swaymsg', '[app_id="chromium-browser"]', 'focus'], check=False)
+        try_run(['swaymsg', '[app_id="chromium"]', 'focus'])
+        try_run(['swaymsg', '[app_id="chromium-browser"]', 'focus'])
     except Exception:
         pass
 
     try:
-        run(['hyprctl', 'dispatch', 'focuswindow', 'class:^(chromium|Chromium)$'], check=False)
+        try_run(['hyprctl', 'dispatch', 'focuswindow', 'class:^(chromium|Chromium)$'])
     except Exception:
         pass
 
     try:
-        run(['xdotool', 'search', '--onlyvisible', '--class', 'chromium', 'windowactivate'], check=False)
+        try_run(['xdotool', 'search', '--onlyvisible', '--class', 'chromium', 'windowactivate'])
     except Exception:
         pass
 
