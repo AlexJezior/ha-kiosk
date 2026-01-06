@@ -1,15 +1,9 @@
 import os
 from datetime import datetime
-
+from dotenv import load_dotenv
 
 def load_env():
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except Exception:
-        pass
-
+    load_dotenv()
 
 def get_env_int(name, default):
     value = os.getenv(name)
