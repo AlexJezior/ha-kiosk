@@ -1,7 +1,8 @@
 import os
-import shlex
-import shutil
+import json
 import time
+import urllib.error
+import urllib.request
 from gpiozero import MotionSensor
 from subprocess import run, Popen
 
@@ -14,7 +15,7 @@ PIR_PIN = get_env_int("PIR_PIN", 17)
 OFF_DELAY = get_env_int("OFF_DELAY", 60)  # Time in seconds (300 = 5 minutes)
 DISPLAY_NAME = get_env_str("DISPLAY_NAME", "HDMI-A-1")  # Run 'wlr-randr' to verify this name
 HA_URL = get_env_str("HA_URL", "http://homeassistant:8123/dashboard-nebula/0?kiosk")
-FOCUS_CMD = get_env_str("FOCUS_CMD", "")
+REMOTE_DEBUG_PORT = get_env_int("REMOTE_DEBUG_PORT", 9222)
 
 # Tell python which display to control (Standard for PI Kiosks)
 os.environ.setdefault('WAYLAND_DISPLAY', "wayland-0")
@@ -33,55 +34,49 @@ def launch_browser():
         "--noerrdialogs",
         "--disable-infobars",
         "--disable-restore-session-state",
+        f"--remote-debugging-port={REMOTE_DEBUG_PORT}",
         HA_URL
     ]
     Popen(cmd)
 
-
-def try_run(cmd):
-    exe = cmd[0]
-    if shutil.which(exe) is None:
-        print(f"[{get_now()}] Not found: {exe}")
-        return None
-    result = run(cmd, check=False)
-    print(f"[{get_now()}] Ran: {' '.join(cmd)} (rc={result.returncode})")
-    return result.returncode
-
-
-def focus_browser():
-    if FOCUS_CMD:
-        try:
-            cmd = shlex.split(FOCUS_CMD)
-            try_run(cmd)
-            return
-        except Exception:
-            return
-
+def remote_reload():
+    base = f"http://127.0.0.1:{REMOTE_DEBUG_PORT}"
     try:
-        try_run(['swaymsg', '[app_id="chromium"]', 'focus'])
-        try_run(['swaymsg', '[app_id="chromium-browser"]', 'focus'])
-    except Exception:
-        pass
+        with urllib.request.urlopen(base + "/json", timeout=1) as resp:
+            targets = json.loads(resp.read().decode("utf-8"))
 
-    try:
-        try_run(['hyprctl', 'dispatch', 'focuswindow', 'class:^(chromium|Chromium)$'])
-    except Exception:
-        pass
+        target_id = None
+        for t in targets:
+            if t.get("type") != "page":
+                continue
+            url = t.get("url", "")
+            if HA_URL in url:
+                target_id = t.get("id")
+                break
 
-    try:
-        try_run(['xdotool', 'search', '--onlyvisible', '--class', 'chromium', 'windowactivate'])
-    except Exception:
-        pass
+        if target_id is None:
+            for t in targets:
+                if t.get("type") == "page":
+                    target_id = t.get("id")
+                    break
+
+        if not target_id:
+            return False
+
+        urllib.request.urlopen(base + f"/json/reload/{target_id}", timeout=1).read()
+        return True
+    except Exception as e:
+        print(f"[{get_now()}] Remote reload failed: {e}")
+        return False
 
 def refresh_browser():
     # Simulate F5 to refresh the page
     print(f"[{get_now()}] Refreshing browser...")
     try:
-        focus_browser()
-        time.sleep(0.2)
-        # Try wayland native first
+        if remote_reload():
+            print(f"[{get_now()}] Remote reload OK")
+            return
         run(['wtype', '-k', 'F5'], check=False)
-        # Fallback to xdotool
         run(['xdotool', 'key', 'F5'], check=False)
     except Exception as e:
         print(f"[{get_now()}] Refresh signal failed: {e}")
