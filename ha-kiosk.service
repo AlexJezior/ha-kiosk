@@ -1,20 +1,29 @@
 [Unit]
 Description=Home Assistant Kiosk Motion Display Manager
-After=network-online.target
+After=network-online.target graphical-session.target
 Wants=network-online.target
+Requires=graphical-session.target
 
 [Service]
 Type=simple
-User=ajezior
 WorkingDirectory=/home/ajezior/ha-kiosk
-ExecStart=/usr/bin/python3 /home/ajezior/ha-kiosk/ha-kiosk.py
-Restart=on-failure
-RestartSec=2
+ExecStart=/usr/bin/python3 -u /home/ajezior/ha-kiosk/ha-kiosk.py
+Restart=always
+RestartSec=5
+
+# Logging to journald (view with: journalctl --user -u ha-kiosk -f)
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits to prevent runaway memory usage
+MemoryMax=512M
+MemoryHigh=256M
 
 # These are also set inside the script, but keeping them here can help ensure
 # systemd starts it with the right session assumptions.
 Environment=WAYLAND_DISPLAY=wayland-0
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=default.target

@@ -1,0 +1,14 @@
+# Logrotate configuration for ha-kiosk
+# Copy this file to /etc/logrotate.d/ha-kiosk
+# sudo cp ha-kiosk.logrotate /etc/logrotate.d/ha-kiosk
+
+/home/ajezior/ha-kiosk/kiosk.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 ajezior ajezior
+    copytruncate
+}
